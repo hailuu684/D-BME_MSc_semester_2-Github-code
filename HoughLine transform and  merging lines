@@ -1,0 +1,346 @@
+public void test_data(Mat empty_img)
+        {
+            OpenCvSharp.Point[] test_P1 = new OpenCvSharp.Point[]
+            {
+                new OpenCvSharp.Point(32,39),
+                new OpenCvSharp.Point(35,42),
+                new OpenCvSharp.Point(132,31),
+                new OpenCvSharp.Point(135,33),
+                //
+                new OpenCvSharp.Point(170,457),
+                new OpenCvSharp.Point(173,460),
+                new OpenCvSharp.Point(175,462),
+                //
+                new OpenCvSharp.Point(220,400),
+                new OpenCvSharp.Point(222,402),
+                new OpenCvSharp.Point(226,406),
+                //
+                new OpenCvSharp.Point(230,410),
+                //antiparallel
+                new OpenCvSharp.Point(33,50),
+                //
+                new OpenCvSharp.Point(440,238),
+                new OpenCvSharp.Point(300,340),
+                //
+                new OpenCvSharp.Point(544,297),
+                new OpenCvSharp.Point(546,314),
+                //
+                new OpenCvSharp.Point(205,432),
+                new OpenCvSharp.Point(227,227)
+            };
+            OpenCvSharp.Point[] test_P2 = new OpenCvSharp.Point[]
+            {
+                new OpenCvSharp.Point(137,611),
+                new OpenCvSharp.Point(140,613),
+                new OpenCvSharp.Point(170,457),
+                new OpenCvSharp.Point(173,460),
+                //
+                new OpenCvSharp.Point(531,545),
+                new OpenCvSharp.Point(534,548),
+                new OpenCvSharp.Point(536,550),
+                //
+                new OpenCvSharp.Point(400,200),
+                new OpenCvSharp.Point(402,202),
+                new OpenCvSharp.Point(300,320),
+                //
+                new OpenCvSharp.Point(304,324),
+                //
+                new OpenCvSharp.Point(400,50),
+                //
+                new OpenCvSharp.Point(290,358),
+                new OpenCvSharp.Point(400,260),
+                //
+                new OpenCvSharp.Point(598,19),
+                new OpenCvSharp.Point(583,122),
+                //
+                new OpenCvSharp.Point(340,449),
+                new OpenCvSharp.Point(340,450)
+            };
+            for (int i = 0; i < test_P1.Length; i++)
+            {
+                Cv2.Line(empty_img, test_P1[i], test_P2[i], Scalar.White, 1);
+                Cv2.Circle(empty_img, test_P1[i], 3, Scalar.White, 1);
+                //Cv2.PutText(empty_img, " ", test_P1[i], HersheyFonts.HersheyComplex, 1, Scalar.White, 1);
+            }
+            Cv2.ImShow("test case", empty_img);
+
+            Mat combine = empty_img.EmptyClone();
+            int remove_line_j = 0;
+            List<OpenCvSharp.Point> point_1 = new List<OpenCvSharp.Point>();
+            List<OpenCvSharp.Point> point_2 = new List<OpenCvSharp.Point>();
+
+            for (int i = 0; i < test_P1.Length; i++)
+            {
+                for (int j = i + 1; j < test_P2.Length; j++)
+                {
+                    double distance_0 = test_P1[i].DistanceTo(test_P1[j]);
+                    double distance_1 = test_P1[i].DistanceTo(test_P2[j]);
+                    double distance_2 = test_P2[i].DistanceTo(test_P2[j]);
+                    double distance_3 = test_P2[i].DistanceTo(test_P1[j]);
+                    double distance = Math.Min(Math.Min(distance_0, distance_1), Math.Min(distance_2, distance_3));
+                    if (distance < 40f && Is_parallel(test_P1[i], test_P2[i], test_P1[j], test_P2[j]) == true)
+                    {
+                        //move to base coordinate
+                        //Console.WriteLine("Before shilfting{0}", test_P1[i]);
+
+
+                        OpenCvSharp.Point saved_P1 = test_P1[i];
+                        OpenCvSharp.Point saved_P1_j = test_P1[j];
+                        test_P2[i] = move_points_towards(test_P1[i], test_P2[i]);
+                        test_P1[i] = move_points_towards(test_P1[i], test_P1[i]);
+                        test_P1[j] = move_points_towards(saved_P1, test_P1[j]);
+                        test_P2[j] = move_points_towards(saved_P1, test_P2[j]);
+
+                        Console.WriteLine($"test point 2i = {test_P2[i]} and test point 2j = {test_P2[j]}");
+                        Console.WriteLine($"test point 1i = {test_P1[i]} and test point 1j = {test_P1[j]}");
+                        Console.WriteLine("distance = {0}", distance);
+                        //calculate angles
+                        ////OpenCvSharp.Point Ox = new OpenCvSharp.Point(200, 0);
+                        //double angle_i = Math.Atan2(test_P2[i].Y, test_P2[i].X);
+                        //double angle_j = Math.Atan2(test_P2[j].Y, test_P2[j].X);
+                        double angle = Math.Atan2(test_P2[i].Y, test_P2[i].X);
+                        //double angle_j = Math.Atan2(test_P2[j].Y, test_P2[j].X);
+                        //Console.WriteLine($"angle_2i = {angle_i * (180 / Math.PI)} angle_2j = {angle_j * (180 / Math.PI)}");
+
+
+                        //rotate by angles
+                        #region checking which endpoints are close to each other
+                        //if (distance == distance_1)
+                        //{
+                        //    test_P2[i] = rotate_by_angle(test_P2[i], -angle);
+                        //    test_P1[j] = rotate_by_angle(test_P1[j], -angle);
+                        //}
+                        //else if (distance == distance_3)
+                        //{
+                        //    test_P1[i] = rotate_by_angle(test_P1[i], -angle);
+                        //    test_P2[j] = rotate_by_angle(test_P2[j], -angle);
+                        //}
+                        //else
+                        //{
+                        //    test_P2[i] = rotate_by_angle(test_P2[i], -angle);
+                        //    test_P2[j] = rotate_by_angle(test_P2[j], -angle);
+                        //}
+                        #endregion
+                        test_P2[i] = rotate_by_angle(test_P2[i], -angle);
+                        test_P2[j] = rotate_by_angle(test_P2[j], -angle);
+
+                        Console.WriteLine($"test point 2i = {test_P2[i]} and test point 2j = {test_P2[j]}");
+                        Console.WriteLine($"test point 1i = {test_P1[i]} and test point 1j = {test_P1[j]}");
+
+                        // scaling the length
+                        double length_i = test_P2[i].X;
+                        double length_j = test_P1[j].DistanceTo(test_P2[j]);
+                        double scaled_length_i = 1 / length_i;
+                        double scaled_length_j = 1 / length_j;
+
+
+                        //merged 2 close lines at origin
+                        var points = update_points(test_P1[i], test_P2[i], test_P1[j], test_P2[j]);
+                        test_P1[i] = points.P1;
+                        test_P2[i] = points.P2;
+                        double max_length = points.max_length;
+                        remove_line_j = j;
+
+                        
+                        //var point_1 = test_P1.ToList();
+                        //var point_2 = test_P2.ToList();
+                        
+
+                        //rotate line 1 back to the origin orientation
+                        test_P2[i] = rotate_by_angle(test_P2[i], angle);
+
+                        
+
+                        Console.WriteLine("   ");
+                        Console.WriteLine("after calculate max length and updated endpoints for line 1");
+                        Console.WriteLine($"test point 1i = {test_P1[i]} and test point 2i = {test_P2[i]}");
+                        Console.WriteLine("max length = " + max_length);
+                        //Console.WriteLine($"scaled length i = {scaled_length_i} scaled length j = {scaled_length_j}");
+                        Console.WriteLine("---------------------");
+
+                        //move back to original position
+                        test_P2[i] = move_points_towards(-test_P2[i], saved_P1);
+                        test_P1[i] = move_points_towards(-test_P1[i], saved_P1);
+                        //test_P1[j] = move_points_towards(-saved_P1, test_P1[j]);
+                        //test_P2[j] = move_points_towards(-saved_P1, test_P2[j]);
+
+
+                        //remove lines with indice "j"
+                        point_1.Add(test_P1[i]);
+                        point_2.Add(test_P2[i]);
+
+                    }
+
+                }
+            }
+            //Console.WriteLine($"{test_P1.Length}  {test_P2.Length}");
+            //point_1.RemoveAt(remove_line_j);
+            //point_2.RemoveAt(remove_line_j);
+
+            Console.WriteLine("num of point 1 = " + point_1.Count);
+
+            //drawing lines
+            for (int i = 0; i < test_P1.Length; i++)
+            {
+                Cv2.Line(combine, test_P1[i], test_P2[i], Scalar.White, 1);
+                //Cv2.Circle(combine, test_P1[i].X,test_P1[i].Y, 3, Scalar.White, 1);
+                //Cv2.PutText(combine, " " + test_P1[i], test_P1[i], HersheyFonts.HersheyComplex, 0.5, Scalar.White);
+            }
+            //for (int i = 0; i < point_1.Count; i++)
+            //{
+            //    Cv2.Line(combine, point_1[i], point_2[i], Scalar.White, 1);
+
+            //}
+
+
+            Cv2.ImShow("test case moving", combine);
+        }
+
+        public OpenCvSharp.Point rotate_by_angle(OpenCvSharp.Point P, double alpha)
+        {
+            double x = P.X * Math.Cos(alpha) - P.Y * Math.Sin(alpha);
+            double y = P.X * Math.Sin(alpha) + P.Y * Math.Cos(alpha);
+            return new OpenCvSharp.Point(x, y);
+        }
+        public double get_angle(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            double y = P2.Y - P1.Y;
+            double x = P2.X - P1.X;
+            double angle = Math.Atan2(y, x);
+
+
+            return angle;
+        }
+
+        public OpenCvSharp.Point move_points_towards(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            return new OpenCvSharp.Point(P2.X - P1.X, P2.Y - P1.Y);
+        }
+        public bool Is_parallel(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        {
+            double slope_1 = 0;
+            double slope_2 = 0;
+            if (P2_i.X != P1_i.X && P2_j.X != P1_j.X )
+            {
+                slope_1 = (P2_i.Y - P1_i.Y) / (P2_i.X - P1_i.X);
+                slope_2 = (P2_j.Y - P1_j.Y) / (P2_j.X - P1_j.X);
+            }
+            //double slope_1 = (P2_i.Y - P1_i.Y) / (P2_i.X - P1_i.X);
+            //double slope_2 = (P2_j.Y - P1_j.Y) / (P2_j.X - P1_j.X);
+            if (Math.Abs(slope_1 - slope_2) < 3f)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        //public double Max_length(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        //{
+        //    double max_length = 0;
+        //    double P1_i_x = P1_i.X;
+        //    double P2_i_x = P2_i.X;
+        //    double P1_j_x = P1_j.X;
+        //    double P2_j_x = P2_j.X;
+        //    if (P1_j_x < P1_i_x && P2_j_x > P1_i_x && P2_j_x < P2_i_x)
+        //    {
+        //        P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+        //        max_length = P1_i.DistanceTo(P2_i);
+        //    }
+        //    else if (P1_j_x < P1_i_x && P2_j_x > P2_i_x)
+        //    {
+        //        P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+        //        P2_i = new OpenCvSharp.Point(P2_j_x, 0);
+        //        max_length = P1_i.DistanceTo(P2_i);
+        //    }
+        //    else if (P1_j_x>P1_i_x && P2_j_x>P1_i_x && P1_j_x<P2_i_x)
+        //    {
+        //        P2_i = new OpenCvSharp.Point(P2_j_x, 0);
+        //        max_length = P1_i.DistanceTo(P2_i);
+        //    }
+        //    else if (P1_j_x>P1_i_x && P1_j_x<P2_i_x && P2_j_x>P1_i_x && P2_j_x<P2_i_x)
+        //    {
+        //        max_length = P1_i.DistanceTo(P2_i);
+        //    }
+
+        //    return max_length;
+        //}
+        (OpenCvSharp.Point P1, OpenCvSharp.Point P2,double max_length) update_points(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        {
+            double max_length = 0;
+            double P1_i_x = P1_i.X;
+            double P2_i_x = P2_i.X;
+            double P1_j_x = P1_j.X;
+            double P2_j_x = P2_j.X;
+            OpenCvSharp.Point P1 = new OpenCvSharp.Point();
+            OpenCvSharp.Point P2 = new OpenCvSharp.Point();
+            if (P1_j_x < P1_i_x && P2_j_x > P1_i_x && P2_j_x < P2_i_x)
+            {
+                P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+                max_length = P1_i.DistanceTo(P2_i);
+                P1 = P1_i;
+                P2 = P2_i;
+            }
+            else if (P1_j_x < P1_i_x && P2_j_x > P2_i_x)
+            {
+                P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+                P2_i = new OpenCvSharp.Point(P2_j_x, 0);
+                max_length = P1_i.DistanceTo(P2_i);
+                P1 = P1_i;
+                P2 = P2_i;
+            }
+            else if (P1_j_x > P1_i_x && P2_j_x > P1_i_x && P1_j_x < P2_i_x)
+            {
+                P2_i = new OpenCvSharp.Point(P2_j_x, 0);
+                max_length = P1_i.DistanceTo(P2_i);
+                P1 = P1_i;
+                P2 = P2_i;
+            }
+            else if (P1_j_x > P1_i_x && P1_j_x < P2_i_x && P2_j_x > P1_i_x && P2_j_x < P2_i_x)
+            {
+                max_length = P1_i.DistanceTo(P2_i);
+                P1 = P1_i;
+                P2 = P2_i;
+            }
+            else if (P1_j_x == P1_i_x && P2_i_x == P2_j_x)
+            {
+                max_length = P1_i.DistanceTo(P2_i);
+                P1 = P1_i;
+                P2 = P2_i;
+            }
+
+            return (P1,P2,max_length);
+        }
+
+        //struct max_length
+        //{
+        //    public OpenCvSharp.Point P1_i;
+        //    public OpenCvSharp.Point P2_i;
+        //    public OpenCvSharp.Point P1_j;
+        //    public OpenCvSharp.Point P2_j;
+
+        //    public double Max_length(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        //    {
+        //        double max_length = 0;
+        //        double P1_i_x = P1_i.X;
+        //        double P2_i_x = P2_i.X;
+        //        double P1_j_x = P1_j.X;
+        //        double P2_j_x = P2_j.X;
+        //        if (P1_j_x < P1_i_x && P2_j_x > P1_i_x && P2_j_x < P2_i_x)
+        //        {
+        //            P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+        //            max_length = P1_i.DistanceTo(P2_i);
+        //        }
+        //        if (P1_j_x < P1_i_x && P2_j_x > P2_i_x)
+        //        {
+        //            P1_i = new OpenCvSharp.Point(P1_j_x, 0);
+        //            P2_i = new OpenCvSharp.Point(P2_j_x, 0);
+        //        }
+
+        //        return max_length;
+
+        //    }
+        //}
+    
