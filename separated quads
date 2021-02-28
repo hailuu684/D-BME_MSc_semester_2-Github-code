@@ -1,0 +1,687 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using OpenCvSharp;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Drawing.Imaging;
+using System.Drawing;
+using OpenCvSharp.XImgProc;
+using RqimOpenCV;
+namespace project_lab_2
+{
+    class HL_1
+    {
+        public void HoughLineP(Mat src)
+        {
+            Mat gray = new Mat();
+            Cv2.CvtColor(src, gray, ColorConversionCodes.BGR2GRAY);
+            var binary = gray.Threshold(0, 255, OpenCvSharp.ThresholdTypes.BinaryInv | OpenCvSharp.ThresholdTypes.Otsu);
+
+            var element = Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(5, 5),
+                new OpenCvSharp.Point(-1, -1));
+            var morp_img = new Mat();
+            Cv2.MorphologyEx(binary, morp_img, MorphTypes.Open, element);
+
+            double min_line_length = 100;
+            double max_line_gap = 5;
+            double rho = 1;
+            double theta = Math.PI / 180;
+            int threshold = 100;
+            LineSegmentPoint[] setHL_P = Cv2.HoughLinesP(binary, rho, theta, threshold, min_line_length, max_line_gap);
+            Mat img_output = morp_img.EmptyClone();
+            //Cv2.ImShow("bin", binary);
+            List<OpenCvSharp.Point> points_1 = new List<OpenCvSharp.Point>();
+            List<OpenCvSharp.Point> points_2 = new List<OpenCvSharp.Point>();
+            foreach (var item in setHL_P)
+            {
+                Cv2.Line(img_output, item.P1, item.P2, Scalar.White, 1);
+                points_1.Add(item.P1);
+                points_2.Add(item.P2);
+            }
+            //Cv2.ImShow("lines detected", img_output);
+
+
+            Mat combine_line = morp_img.EmptyClone();
+            while (true)
+            {
+                double min_ij_dist = double.MaxValue;
+                int min_ij_i = 0;
+                int min_ij_j = 0;
+                for (int i = 0; i < points_1.Count - 1; i++)
+                {
+                    for (int j = i + 1; j < points_2.Count; j++)
+                    {
+                        double dist_from_P1_P2 = points_1[i].DistanceTo(points_2[j]);
+                        double dist_from_P2_P1 = points_2[i].DistanceTo(points_1[j]);
+
+                        double dist_from_P1_P1 = points_1[i].DistanceTo(points_1[j]);
+                        double dist_from_P2_P2 = points_2[i].DistanceTo(points_2[j]);
+
+                        var dist_ij = Math.Min(dist_from_P1_P2 + dist_from_P2_P1, dist_from_P1_P1 + dist_from_P2_P2);
+
+                        if (dist_ij < min_ij_dist)
+                        {
+                            min_ij_dist = dist_ij;
+                            min_ij_i = i;
+                            min_ij_j = j;
+                        }
+                    }
+                }
+                if (min_ij_dist < 40f)
+                {
+                    points_1[min_ij_i] = new OpenCvSharp.Point((points_1[min_ij_i].X + points_1[min_ij_j].X) * 0.5f,
+                        (points_1[min_ij_i].Y + points_1[min_ij_j].Y) * 0.5f);
+                    points_2[min_ij_i] = new OpenCvSharp.Point((points_2[min_ij_i].X + points_2[min_ij_j].X) * 0.5f,
+                        (points_2[min_ij_i].Y + points_2[min_ij_j].Y) * 0.5f);
+                    points_1.RemoveAt(min_ij_j);
+                    points_2.RemoveAt(min_ij_j);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                Cv2.Line(combine_line, points_1[i], points_2[i], Scalar.White, 1);
+                Cv2.Circle(combine_line, points_1[i], 3, Scalar.White);
+                Cv2.PutText(combine_line, " " + points_2[i], points_2[i], HersheyFonts.HersheyComplex,
+                    0.5, Scalar.White);
+            }
+            Cv2.ImShow("combined lines", combine_line);
+
+
+            //merging lines
+            #region merging lines at the origin
+            Mat merged_lines = src.EmptyClone();
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = i + 1; j < points_2.Count; j++)
+                {
+                    //Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                    //Console.WriteLine($"point_1j = {points_1[j]} and point_2j = {points_2[j]}");
+                    //if (points_2[i].X < 140 && points_2[i].Y > 202)
+                    //{
+                    //    Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                    //    Console.WriteLine($"point_1j = {points_1[j]} and point_2j = {points_2[j]}");
+                    //}
+                    double dist_from_P1_P2 = points_1[i].DistanceTo(points_2[j]);
+                    double dist_from_P2_P1 = points_2[i].DistanceTo(points_1[j]);
+
+                    double dist_from_P1_P1 = points_1[i].DistanceTo(points_1[j]);
+                    double dist_from_P2_P2 = points_2[i].DistanceTo(points_2[j]);
+                    double distance = Math.Min(Math.Min(dist_from_P1_P1, dist_from_P2_P2), Math.Min(dist_from_P1_P2, dist_from_P2_P1));
+                    //Console.WriteLine("distance = " + distance);
+                    if (distance < 30f && Is_parallel(points_1[i], points_2[i], points_1[j], points_2[j]) == true)
+                    {
+                        OpenCvSharp.Point saved_P1 = points_1[i];
+                        OpenCvSharp.Point saved_P1_j = points_1[j];
+                        points_2[i] = move_points_towards(points_1[i], points_2[i]);
+                        points_1[i] = move_points_towards(points_1[i], points_1[i]);
+                        points_1[j] = move_points_towards(saved_P1, points_1[j]);
+                        points_2[j] = move_points_towards(saved_P1, points_2[j]);
+                        //Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                        //Console.WriteLine($"point_1j = {points_1[j]} and point_2j = {points_2[j]}");
+
+                        //Console.WriteLine("distance = " + distance);
+
+                        //calculate angles
+                        double angle = Math.Atan2(points_2[i].Y, points_2[i].X);
+                        points_2[i] = rotate_by_angle(points_2[i], -angle);
+                        points_2[j] = rotate_by_angle(points_2[j], -angle);
+                        //Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                        //Console.WriteLine($"point_1j = {points_1[j]} and point_2j = {points_2[j]}");
+                        //Console.WriteLine("-----------------------------");
+
+                        //if (points_2[i].X == 0 && points_2[i].Y == 0)
+                        //{
+                        //    Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                        //    Console.WriteLine($"point_1j = {points_1[j]} and point_2j = {points_2[j]}");
+                        //}
+
+                        // scaling the length
+                        double length_i = points_2[i].X;
+                        double length_j = points_1[j].DistanceTo(points_2[j]);
+
+                        //updating the endpoints for line i
+                        var points = update_points(points_1[i], points_2[i], points_1[j], points_2[j]);
+                        points_1[i] = points.P1;
+                        points_2[i] = points.P2;
+                        //double max_length = points.max_length;
+                        //Console.WriteLine($"point_1i = {points_1[i]} and point_2i = {points_2[i]}");
+                        //Console.WriteLine("-----------------------------");
+
+                        //rotate line 1 back to the origin orientation
+                        points_2[i] = rotate_by_angle(points_2[i], angle);
+
+                        //move back to original position
+                        points_2[i] = move_points_towards(-points_2[i], saved_P1);
+                        points_1[i] = move_points_towards(-points_1[i], saved_P1);
+
+                        points_1.RemoveAt(j);
+                        points_2.RemoveAt(j);
+                    }
+                }
+            }
+            #endregion
+
+            #region get corners for each intersection
+            List<OpenCvSharp.Point> corners = new List<OpenCvSharp.Point>();
+
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = i + 1; j < points_2.Count; j++)
+                {
+                    if (Is_neighbor_corners(points_1[i], points_2[i], points_1[j], points_2[j]) == true)
+                    {
+                        OpenCvSharp.Point corners_draw = get_intersection(points_1[i], points_2[i], points_1[j], points_2[j]);
+                        corners.Add(corners_draw);
+                        //Console.WriteLine("corners = " + corners);
+
+                        //Cv2.Circle(merged_lines, corners_draw, 5, Scalar.White);
+                    }
+                }
+            }
+            #endregion
+            //Console.WriteLine($"point1 = {points_1.Count} point2 = {points_2.Count} and corners = {corners.Count}");
+
+            #region remove 2 lines that lie on each other
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = i + 1; j < points_2.Count; j++)
+                {
+                    if (Math.Abs(points_1[i].X - points_1[j].X) < 5 && Math.Abs(points_1[i].Y - points_1[j].Y) < 5 || Math.Abs(points_2[i].Y - points_2[j].Y) < 5 && Math.Abs(points_2[i].X - points_2[j].X) < 5)
+                    {
+                        double slope_1 = get_slope(points_1[i], points_2[i]);
+                        double slope_2 = get_slope(points_1[j], points_2[j]);
+                        if (Math.Abs(slope_1 - slope_2) < 2)
+                        {
+                            double dist_1 = points_1[i].DistanceTo(points_2[i]);
+                            double dist_2 = points_1[j].DistanceTo(points_2[j]);
+                            if (dist_1 < dist_2)
+                            {
+                                points_1.RemoveAt(i);
+                                points_2.RemoveAt(i);
+                            }
+                            else
+                            {
+                                points_1.RemoveAt(j);
+                                points_2.RemoveAt(j);
+                            }
+                        }
+
+                    }
+                }
+
+            }
+            #endregion
+            //draw megered lines
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                Cv2.Line(merged_lines, points_1[i], points_2[i], Scalar.White, 1);
+                //Console.WriteLine($"point 1 = {points_1[i]} and point 2 = {points_2[i]}");
+            }
+            //Cv2.ImShow("merged lines", merged_lines);
+
+            //concatnate all points and coners into just 1 list
+            List<OpenCvSharp.Point> all_points = new List<OpenCvSharp.Point>();
+            //Dictionary<int, OpenCvSharp.Point > all_points_1 = new Dictionary<int, OpenCvSharp.Point>();
+
+            //Console.WriteLine($"{points_1.Count} {points_2.Count} {corners.Count}");
+
+
+            List<List<OpenCvSharp.Point>> corner_list = new List<List<OpenCvSharp.Point>>();
+            List<OpenCvSharp.Point> corner_quad = new List<OpenCvSharp.Point>();
+            Mat separate_quads = src.EmptyClone();
+            OpenCvSharp.Point c1 = new OpenCvSharp.Point();
+            OpenCvSharp.Point c2 = new OpenCvSharp.Point();
+            OpenCvSharp.Point c3 = new OpenCvSharp.Point();
+            OpenCvSharp.Point c4 = new OpenCvSharp.Point();
+
+            #region separated quads
+            Line l1, l2, l3;
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = i + 1; j < points_2.Count; j++)
+                {
+                    for (int z = j + 1; z < points_2.Count; z++)
+                    {
+                        if (Is_neighbor_quad(points_1[i], points_2[i], points_1[j], points_2[j]) == true &&
+                            Is_neighbor_quad(points_1[j], points_2[j], points_1[z], points_2[z]) == true)
+                        {
+                            l1 = new Line(points_1[i].X, points_1[i].Y, points_2[i].X, points_2[i].Y);
+                            l2 = new Line(points_1[j].X, points_1[j].Y, points_2[j].X, points_2[j].Y);
+                            l3 = new Line(points_1[z].X, points_1[z].Y, points_2[z].X, points_2[z].Y);
+                            c2 = l1.InterSection_cv(l2);
+                            c3 = l2.InterSection_cv(l3);
+
+                            if (Is_points_close(points_1[i], c2) == true)
+                            {
+                                c1 = points_2[i];
+                            }
+                            else
+                            {
+                                c1 = points_1[i];
+                            }
+                            if (Is_points_close(points_1[z], c3) == true)
+                            {
+                                c4 = points_2[z];
+                            }
+                            else
+                            {
+                                c4 = points_1[z];
+                            }
+
+                            corner_quad = new List<OpenCvSharp.Point> { c1, c2, c3, c4 };
+                            corner_list.Add(corner_quad);
+                        }
+                        else if (Is_neighbor_quad(points_1[j], points_2[j], points_1[i], points_2[i]) == true && Is_neighbor_quad(points_1[i], points_2[i], points_1[z], points_2[z]) == true)
+                        {
+                            l1 = new Line(points_1[j].X, points_1[j].Y, points_2[j].X, points_2[j].Y);
+                            l2 = new Line(points_1[i].X, points_1[i].Y, points_2[i].X, points_2[i].Y);
+                            l3 = new Line(points_1[z].X, points_1[z].Y, points_2[z].X, points_2[z].Y);
+                            c2 = l1.InterSection_cv(l2);
+                            c3 = l2.InterSection_cv(l3);
+
+                            if (Is_points_close(points_1[j], c2) == true)
+                            {
+                                c1 = points_2[j];
+                            }
+                            else
+                            {
+                                c1 = points_1[j];
+                            }
+                            if (Is_points_close(points_1[z], c3) == true)
+                            {
+                                c4 = points_2[z];
+                            }
+                            else
+                            {
+                                c4 = points_1[z];
+                            }
+
+                            corner_quad = new List<OpenCvSharp.Point> { c1, c2, c3, c4 };
+                            corner_list.Add(corner_quad);
+                            //Console.WriteLine($"c1 = {c1} c2 = {c2} c3 = {c3} c4 = {c4}");
+
+                            //Cv2.Line(separate_quads, c1, c2, Scalar.White);
+                            //Cv2.Line(separate_quads, c2, c3, Scalar.White);
+                            //Cv2.Line(separate_quads, c3, c4, Scalar.White);
+                            //OpenCvSharp.Window.ShowImages(new[] { separate_quads });
+                        }
+                        else if (Is_neighbor_quad(points_1[i], points_2[i], points_1[z], points_2[z]) == true && Is_neighbor_quad(points_1[z], points_2[z], points_1[j], points_2[j]))
+                        {
+                            l1 = new Line(points_1[i].X, points_1[i].Y, points_2[i].X, points_2[i].Y);
+                            l2 = new Line(points_1[z].X, points_1[z].Y, points_2[z].X, points_2[z].Y);
+                            l3 = new Line(points_1[j].X, points_1[j].Y, points_2[j].X, points_2[j].Y);
+                            c2 = l1.InterSection_cv(l2);
+                            c3 = l2.InterSection_cv(l3);
+
+                            if (Is_points_close(points_1[i], c2) == true)
+                            {
+                                c1 = points_2[i];
+                            }
+                            else
+                            {
+                                c1 = points_1[i];
+                            }
+                            if (Is_points_close(points_1[j], c3) == true)
+                            {
+                                c4 = points_2[j];
+                            }
+                            else
+                            {
+                                c4 = points_1[j];
+                            }
+
+                            corner_quad = new List<OpenCvSharp.Point> { c1, c2, c3, c4 };
+                            corner_list.Add(corner_quad);
+                            //Console.WriteLine($"c1 = {c1} c2 = {c2} c3 = {c3} c4 = {c4}");
+                        }
+                        //corner_list.Add(corner_quad);
+                        //Console.WriteLine($"c1 = {c1} c2 = {c2} c3 = {c3} c4 = {c4}");
+                    }
+                }
+            }
+            //Console.WriteLine("corner quad count = " + corner_quad.Count);
+            #endregion
+
+            #region draw each quad
+            foreach (var quads in corner_list)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    Cv2.Line(separate_quads, quads[0], quads[1], Scalar.White);
+                    Cv2.Line(separate_quads, quads[1], quads[2], Scalar.White);
+                    Cv2.Line(separate_quads, quads[2], quads[3], Scalar.White);
+                    //Cv2.Line(separate_quads, quads[i], quads[i + 1], Scalar.White);
+                    separate_quads.DrawMarker(quads[i].X, quads[i].Y, OpenCvSharp.Scalar.White);
+                    Console.WriteLine(quads[i]);
+                }
+                OpenCvSharp.Window.ShowImages(new[] { separate_quads });
+                Console.WriteLine("--------------");
+                Console.WriteLine("coordinates of each separated quad");
+            }
+
+            #endregion
+
+
+
+
+            #region check if endpoints close to corners or not, if yes, remove it
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = 0; j < corners.Count; j++)
+                {
+                    if (Is_points_coners_close(points_1[i], corners[j]) == true)
+                    {
+                        points_1.RemoveAt(i);
+                        //break;
+                    }
+                }
+            }
+
+            //for (int i = 0; i < points_2.Count; i++)
+            //{
+            //    for (int j = 0; j < corners.Count; j++)
+            //    {                   
+            //        if (Is_points_coners_close(points_2[i], corners[j]) == true)
+            //        {
+            //            points_2.RemoveAt(i);
+            //            //break;
+            //        }
+            //    }
+            //}
+
+            // idk why but method above does not remove point 1 if y_point1 = y_corners
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                for (int j = 0; j < corners.Count; j++)
+                {
+                    if (points_1[i].Y == corners[j].Y)
+                    {
+                        points_1.RemoveAt(i);
+                        //points_2.RemoveAt(i);
+                    }
+                }
+            }
+            //Console.WriteLine($"point1 count = {points_1.Count} and point 2 count = {points_2.Count} and corners = {corners.Count}");
+            #endregion
+
+            #region add all points left to a list
+            foreach (var item in corners)
+            {
+                all_points.Add(item);
+                
+            }
+            for (int i = 0; i < points_1.Count; i++)
+            {
+                all_points.Add(points_1[i]);
+                //Cv2.Circle(merged_lines, points_1[i], 3, Scalar.White);
+                //Cv2.PutText(merged_lines, " " + points_1[i], points_1[i], HersheyFonts.HersheyComplex, 0.5, Scalar.White);
+            }
+            for (int i = 0; i < points_2.Count; i++)
+            {
+                all_points.Add(points_2[i]);
+                //Cv2.Circle(merged_lines, points_2[i], 3, Scalar.White);
+            }
+            for (int i = 0; i < all_points.Count; i++)
+            {
+                Cv2.Circle(merged_lines, all_points[i], 4, Scalar.White);
+                Cv2.PutText(merged_lines, " " + all_points[i], all_points[i], HersheyFonts.HersheyComplex, 0.5, Scalar.White);
+            }
+            #endregion
+
+           
+
+
+            Console.WriteLine("all points are " + all_points.Count);
+            //Cv2.ImShow("merged lines", merged_lines);
+
+
+        }
+       
+
+        public OpenCvSharp.Point rotate_by_angle(OpenCvSharp.Point P, double alpha)
+        {
+            double x = P.X * Math.Cos(alpha) - P.Y * Math.Sin(alpha);
+            double y = P.X * Math.Sin(alpha) + P.Y * Math.Cos(alpha);
+            return new OpenCvSharp.Point(x, y);
+        }
+        public double get_angle(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            double y = P2.Y - P1.Y;
+            double x = P2.X - P1.X;
+            double angle = Math.Atan2(y, x);
+
+
+            return angle;
+        }
+
+        public OpenCvSharp.Point move_points_towards(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            return new OpenCvSharp.Point(P2.X - P1.X, P2.Y - P1.Y);
+        }
+        public bool Is_parallel(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        {
+            double slope_1 = 0;
+            double slope_2 = 0;
+            if (P2_i.X != P1_i.X && P2_j.X != P1_j.X)
+            {
+                slope_1 = (P2_i.Y - P1_i.Y) / (P2_i.X - P1_i.X);
+                slope_2 = (P2_j.Y - P1_j.Y) / (P2_j.X - P1_j.X);
+            }
+            //double slope_1 = (P2_i.Y - P1_i.Y) / (P2_i.X - P1_i.X);
+            //double slope_2 = (P2_j.Y - P1_j.Y) / (P2_j.X - P1_j.X);
+            if (Math.Abs(slope_1 - slope_2) < 2f)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        (OpenCvSharp.Point P1, OpenCvSharp.Point P2, double max_length) update_points(OpenCvSharp.Point P1_i, OpenCvSharp.Point P2_i, OpenCvSharp.Point P1_j, OpenCvSharp.Point P2_j)
+        {
+            double max_length = 0;
+
+            //Console.WriteLine($"P1_i = {P1_i} and P2_i = {P2_i}");
+            //Console.WriteLine($"P1_j = {P1_j} and P2_j = {P2_j}");
+            OpenCvSharp.Point P1 = new OpenCvSharp.Point();
+            OpenCvSharp.Point P2 = new OpenCvSharp.Point();
+            P1.X = Math.Min(P1_i.X, P1_j.X);
+            //P1.Y = Math.Min(P1_i.Y, P1_j.Y);
+            P1.Y = 0;
+            P2.X = Math.Max(P2_i.X, P2_j.X);
+            //P2.Y = Math.Max(P2_i.Y, P2_j.Y);
+            P2.Y = 0;
+            /// the problem for merged lines seem like shorter than dummy comparison
+            /// is because math.max or min only compare the int values,.i.e: 3.87 will be 3,
+            /// that's why the merged lines is shorter???
+            max_length = P1_i.DistanceTo(P2_i);          
+            return (P1, P2, max_length);
+        }
+
+
+        public OpenCvSharp.Point get_intersection(OpenCvSharp.Point P1, OpenCvSharp.Point P2, OpenCvSharp.Point P3, OpenCvSharp.Point P4)
+        {
+            //compute the determinant
+            double Px = 0;
+            double Py = 0;
+            var denominator = (P1.X - P2.X) * (P3.Y - P4.Y) - (P1.Y - P2.Y) * (P3.X - P4.X);
+            if (denominator != 0)
+            {
+                Px = ((P1.X * P2.Y - P1.Y * P2.X) * (P3.X - P4.X) - (P1.X - P2.X) * (P3.X * P4.Y - P3.Y * P4.X)) / denominator;
+                Py = ((P1.X * P2.Y - P1.Y * P2.X) * (P3.Y - P4.Y) - (P1.Y - P2.Y) * (P3.X * P4.Y - P3.Y * P4.X)) / denominator;
+            }
+
+            return new OpenCvSharp.Point(Px, Py);
+        }
+
+        public bool Is_neighbor(OpenCvSharp.Point P1, OpenCvSharp.Point P2, OpenCvSharp.Point P3, OpenCvSharp.Point P4)
+        {
+            double distance_0 = P1.DistanceTo(P3);
+            double distance_1 = P1.DistanceTo(P4);
+            double distance_2 = P2.DistanceTo(P3);
+            double distance_3 = P2.DistanceTo(P4);
+            double distance = Math.Min(Math.Min(distance_0, distance_1), Math.Min(distance_2, distance_3));
+            if (distance < 3)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        #region find corners with method pair(point,slope)
+        public bool Is_neighbor_corners(OpenCvSharp.Point P1, OpenCvSharp.Point P2, OpenCvSharp.Point P3, OpenCvSharp.Point P4)
+        {
+            double distance_0 = P1.DistanceTo(P3);
+            double distance_1 = P1.DistanceTo(P4);
+            double distance_2 = P2.DistanceTo(P3);
+            double distance_3 = P2.DistanceTo(P4);
+            double distance = Math.Min(Math.Min(distance_0, distance_1), Math.Min(distance_2, distance_3));
+            if (distance < 20)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public OpenCvSharp.Point find_intersection(OpenCvSharp.Point P1, double slope_1, OpenCvSharp.Point P2, double slope_2)
+        {
+            double denom = slope_2 - slope_1;
+            double numer = 0;
+            double x = 0;
+            double y = 0;
+            if (denom != 0)
+            {
+                numer = slope_2 * P2.X - slope_1 * P1.X - P2.Y + P1.Y;
+                x = numer / denom;
+                y = slope_1 * (x - P1.X) + P1.Y;
+            }
+            return new OpenCvSharp.Point(x, y);
+        }
+        public bool Is_belong_to_line(OpenCvSharp.Point P1, double slope, OpenCvSharp.Point P2)
+        {
+            // y = mx+c
+            double c = 0;
+            if (slope != 0)
+            {
+                c = P1.Y / (slope * P1.X);
+                if (P2.Y == (slope * P2.X + c))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                c = P1.Y;
+                if (P2.Y == c)
+                {
+                    return true;
+                }
+            }
+            return false;
+
+        }
+
+        public double get_slope(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            double slope = 0;
+            if (P2.X != P1.X)
+            {
+                slope = (P2.Y - P1.Y) / (P2.X - P1.X);
+            }
+            else
+            {
+                slope = 0;
+            }
+            //Console.WriteLine("y = " + P2.Y);
+            return slope;
+        }
+        #endregion
+
+        //public OpenCvSharp.Point find_intersection(OpenCvSharp.Point P1, OpenCvSharp.Point P2, OpenCvSharp.Point P3, OpenCvSharp.Point P4)
+        //{
+        //    double A1 = P2.Y - P1.Y;
+        //    double B1 = P1.X - P2.X;
+        //    double C1 = A1 * P1.X + B1 * P1.Y;
+
+        //    double A2 = P4.Y - P3.Y;
+        //    double B2 = P3.X - P4.X;
+        //    double C2 = A2 * P3.X + B2 * P3.Y;
+
+        //    double det = A1 * B2 - A2 * B1;
+        //    double x = 0;
+        //    double y = 0;
+        //    if (det!=0)
+        //    {
+        //        x = (B2 * C1 - B1 * C2) / det;
+        //        y = (A1 * C2 - A2 * C1) / det;
+        //    }
+        //    return new OpenCvSharp.Point(x, y);
+        //}
+        public static double GetAngle_3_points(OpenCvSharp.Point p1, OpenCvSharp.Point p2, OpenCvSharp.Point p3)
+        {
+            double A2 = p1.DistanceTo(p2);
+            double B2 = p2.DistanceTo(p3);
+            double C2 = p3.DistanceTo(p1);
+
+            double cc = (A2 + B2 - C2) / (2 * (float)Math.Sqrt(A2) * (float)Math.Sqrt(B2));
+            var angle = (float)Math.Acos(cc) * 180 / (float)Math.PI;
+            return angle;
+        }
+
+        public bool Is_points_coners_close(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            if (Math.Abs(P1.X - P2.X) < 30 & Math.Abs(P1.Y - P2.Y) < 30)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        #region for separating quads
+        public bool Is_points_close(OpenCvSharp.Point P1, OpenCvSharp.Point P2)
+        {
+            if (Math.Abs(P1.X - P2.X) < 5 & Math.Abs(P1.Y - P2.Y) < 5)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        public bool Is_neighbor_quad(OpenCvSharp.Point P1, OpenCvSharp.Point P2, OpenCvSharp.Point P3, OpenCvSharp.Point P4)
+        {
+            double distance_0 = P1.DistanceTo(P3);
+            double distance_1 = P1.DistanceTo(P4);
+            double distance_2 = P2.DistanceTo(P3);
+            double distance_3 = P2.DistanceTo(P4);
+            double distance = Math.Min(Math.Min(distance_0, distance_1), Math.Min(distance_2, distance_3));
+            if (distance < 15)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        #endregion
+    }
+}
